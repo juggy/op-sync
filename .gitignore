@@ -1,1 +1,4 @@
 .DS_Store
+op-sync.sublime-project
+op-sync.sublime-workspace
+node_modules
