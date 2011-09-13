@@ -1,14 +1,16 @@
+# Export for both CommonJS and the browser.
+[_server, OS] = if typeof exports isnt 'undefined'
+  _ = require "underscore"
+  [true, exports]
+else 
+  [false, this.OS = {}]
+
 # Check for the implementation of a function by an object and throw if not
 # This is to enforce some kind a interface at runtime
 _implements = (object, interface)->
   for prop in interface
     if typeof interface[prop] is "function" and typeof object[prop] isnt "function"
       throw new "Object does not implement function #{prop} as specified by the pseudo interface."
-
-  
-
-# Export for both CommonJS and the browser.
-[_server, OS] = if typeof exports isnt 'undefined' then [true, exports] else [false, this.OS = {}]
 
 # Base transform object ot be assembled to create operations on fields
 # All transform for a particular model/id uses the same guid to group them
@@ -67,10 +69,12 @@ _config =
   url : "/sync/"
   ajax: (opts)-> $.ajax(opts)
   events: new OS.Interfaces.Events
-  store: new OS.Interfaces.Persistence
+  persistence: new OS.Interfaces.Persistence
 
 class OS.Device
-  constructor: (config = _config.splice(0), @uuid = null)->
+  constructor: (config = {}, @uuid = null)->
+
+    config = _.extend _.clone(_config), config
 
     # Communication layer - same as jquery ajax
     @ajax = config.ajax
@@ -80,19 +84,20 @@ class OS.Device
     _implements(@events, OS.Interfaces.Persistence)
 
     # lookup the local storage or use in memory
-    @store = _config.persistence
+    @store = config.persistence
     _implements(@store, OS.Interfaces.Persistence)
 
     @uuid = @uuid || @store.get "op.device.uuid"
-    @sync_log = if @uuid
+    if @uuid
       # load uuid from persistence
       backlog = @store.get uuid
-      new OS.SyncLog(this, backlog)
+      @sync_log = new OS.SyncLog(this, backlog)
     else
       # gen uuid and trigger device reg
       @uuid = @gen_uuid()
+      @sync_log = new OS.SyncLog(this, [])
       @register()
-      new OS.SyncLog(this, backlog)
+      
 
   register: ->
     params = 
@@ -105,7 +110,7 @@ class OS.Device
       url: _config.url + "register"
       data : JSON.stringify( {registration : @uuid} )
 
-    @ajax( params )
+    @ajax( params, this)
 
   save: ->
     @store.set "op.device.uuid", @uuid
@@ -175,7 +180,7 @@ class OS.SyncLog
     # there is nothing specific to the add. The id is simply not known
 
     # go thru the whole backlog to find consecutive syncs
-    backlog_local = @get_backlog().splice(0)
+    backlog_local = _.clone @get_backlog()
     index = 0
     spliced = 0
     for tr in backlog_local
@@ -218,8 +223,8 @@ class OS.SyncLog
 
   remove_instance_backlog: (instance_sync)->
     backlog = @get_backlog()
-    final = backlog.splice(0)
-    sliced = 0
+    final = _.clone backlog
+    spliced = 0
     index = 0
     for tr in backlog
       if tr.model is instance_sync.model and tr.id is instance_sync.id
@@ -255,7 +260,7 @@ class OS.InstanceLog
 
   set_backlog: (backlog)->
     # set the backlog for this instance into the Global backlog
-    @backlog = backlog.splice(0)
+    @backlog = _.clone backlog
     @sync_log.set_instance_backlog(this, @backlog)
 
   compile: (incoming = null, backlog = null)->
