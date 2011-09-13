@@ -69,28 +69,24 @@ _config =
   events: new OS.Interfaces.Events
   store: new OS.Interfaces.Persistence
 
-OS.configure = (block)->
-  # configure op-sync
-  block.call _config
-
-  # Communication layer - same as jquery ajax
-  OS.ajax = _config.ajax
-
-  # callbacks when updating local object
-  OS.events = _config.events
-  _implements(_callbacks, OS.Interfaces.Persistence)
-
-  # lookup the local storage or use in memory
-  OS.store = _config.persistence
-  _implements(OS.store, OS.Interfaces.Persistence)
-
-
 class OS.Device
-  constructor: (@uuid = null)->
-    @uuid = @uuid || OS.store.get "op.device.uuid"
+  constructor: (config = _config.splice(0), @uuid = null)->
+
+    # Communication layer - same as jquery ajax
+    @ajax = config.ajax
+
+    # callbacks when updating local object
+    @events = config.events
+    _implements(@events, OS.Interfaces.Persistence)
+
+    # lookup the local storage or use in memory
+    @store = _config.persistence
+    _implements(@store, OS.Interfaces.Persistence)
+
+    @uuid = @uuid || @store.get "op.device.uuid"
     @sync_log = if @uuid
       # load uuid from persistence
-      backlog = OS.store.get uuid
+      backlog = @store.get uuid
       new OS.SyncLog(this, backlog)
     else
       # gen uuid and trigger device reg
@@ -109,11 +105,11 @@ class OS.Device
       url: _config.url + "register"
       data : JSON.stringify( {registration : @uuid} )
 
-    OS.ajax( params )
+    @ajax( params )
 
-  _save: ->
-    OS.store.set "op.device.uuid", @uuid
-    OS.store.set @uuid, @sync_log.backlog
+  save: ->
+    @store.set "op.device.uuid", @uuid
+    @store.set @uuid, @sync_log.backlog
 
   instance: (model, id)->
     new OS.InstanceLog(@sync_log, model, id)
@@ -125,7 +121,7 @@ class OS.Device
 # Sync log
 class OS.SyncLog
   instance_index: {}
-  constructor: (@device = new OS.Device, @backlog = [], @options = {})->
+  constructor: (@device, @backlog = [], @options = {})->
 
   instance_index: ->
     return @_instance_index if @_instance_index
@@ -161,7 +157,7 @@ class OS.SyncLog
       url: _config.url + @device.uuid
       data : JSON.stringify( tr.toJSON() for tr in @get_backlog() )
 
-    OS.ajax( params )
+    @device.ajax( params )
 
   parse_incoming: (data)->
     for tr in data
@@ -204,7 +200,7 @@ class OS.SyncLog
             tr
       break if deleted
       # this will set the backlog(!?) and update the record locally
-      OS.events.update instance.model, instance.id, instance.compile(fields) 
+      @device.events.update instance.model, instance.id, instance.compile(fields) 
     #complete our successful sync by marking the backlog
     @add_to_backlog [new OS.SyncTransform]
 
