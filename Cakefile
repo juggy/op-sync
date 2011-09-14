@@ -23,7 +23,7 @@ onerror = (err)->
     process.exit -1
 
 
-## Building ##
+## Buildiscorng ##
 
 build = (callback)->
   log "Compiling CoffeeScript to JavaScript ...", green
@@ -34,22 +34,25 @@ build = (callback)->
 task "build", "Compile CoffeeScript to JavaScript", -> build onerror
 
 task "watch", "Continously compile CoffeeScript to JavaScript", ->
-  cmd = spawn("coffee", ["-cw", "-o", "lib", "src"])
+  cmd = spawn("coffee", ["-cw", "src"])
   cmd.stdout.on "data", (data)-> process.stdout.write green + data + reset
   cmd.on "error", onerror
-  
-  cmdTest = spawn("coffee", ["-cw", "-o", "spec/lib", "spec"])
-  cmdTest.stdout.on "data", (data)-> process.stdout.write green + data + reset
-  cmdTest.on "error", onerror
 
 
 runTests = (callback)->
   log "Running test suite ...", green
+
+  # cmd = spawn("vows", ["--verbose", "--watch", "--spec"])
+  # cmd.stdout.on "data", (data)-> stdout.write data
+  #cmd.stderr.on "data", (data)-> stdout.write data
+  #cmd.on "error", onerror
+
   exec "vows --spec spec/*-spec.coffee", (err, stdout, stderr)->
     process.stdout.write stdout
     process.binding("stdio").writeError stderr
     callback err if callback
 task "test", "Run all tests", ->
+  # runTests()
   runTests (err)->
     process.stdout.on "drain", -> process.exit -1 if err
 
@@ -63,3 +66,4 @@ generateDocs = (callback)->
 
 task "doc",        "Generate all documentation",               -> generateDocs onerror
 
+  

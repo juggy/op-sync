@@ -6,9 +6,9 @@ h = require('./helpers')
 suite = vows.describe("device")
 suite.addBatch
   "create a totally new device" :
-    topic: ->
+    topic: -> 
       new op.Device
-        ajax: (params, dev)=> 
+        ajax: (params, dev)=>
           params.success()
           @callback( dev, params )
       undefined
