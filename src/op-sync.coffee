@@ -163,8 +163,8 @@ class OS.SyncLog
       # keep the backlog, not much to do
 
     @reset_synced()
-
-    @backlog.push new OS.SyncTransform()
+    
+    @backlog.push new OS.SyncTransform() if _.last(@backlog)?.operation isnt "syc"
 
     _log("Sync Backlog", @get_backlog() ) if @device.debug
     

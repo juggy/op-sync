@@ -73,7 +73,8 @@ suite.addBatch({
       obj2.set({
         field1: 3
       }, false);
-      return device.sync_log.sync_backlog();
+      device.sync_log.sync_backlog();
+      return;
     },
     "update should not be called": function(device, updates, backend) {
       return assert.equal(updates.length, 0);
@@ -94,6 +95,22 @@ suite.addBatch({
       var _ref;
       assert.equal(device.sync_log.backlog.length, 1);
       return assert.equal((_ref = _.last(device.sync_log.backlog)) != null ? _ref.operation : void 0, "cfn");
+    }
+  },
+  "error sync": {
+    topic: function() {
+      var device, obj;
+      obj = new h.MockModel;
+      device = obj.device;
+      device.ajax = __bind(function(params) {
+        return this.callback(device.sync_log.backlog.length, _.last(device.sync_log.backlog));
+      }, this);
+      device.sync_log.sync_backlog();
+      return;
+    },
+    "backlog should not be changed": function(l, last) {
+      assert.equal(l, 1);
+      return assert.equal(last.operation, "syc");
     }
   },
   "update the object while it is syncing": {

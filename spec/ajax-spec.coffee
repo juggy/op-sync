@@ -43,7 +43,7 @@ suite.addBatch
       , false
 
       device.sync_log.sync_backlog()
-
+      undefined
     "update should not be called" : (device, updates, backend)->
       assert.equal updates.length, 0
     "backend should receive data" : (device, updates, backend) ->
@@ -60,9 +60,21 @@ suite.addBatch
     "reset whould void the backlog" : (device, updates, backend)->
       assert.equal device.sync_log.backlog.length, 1
       assert.equal _.last( device.sync_log.backlog )?.operation, "cfn"
-  # "error sync": 
-  #   topic: ->
-  #   "backlog should not be changed": ->
+
+  "error sync": 
+    topic: ->
+      obj = new h.MockModel
+      device = obj.device
+      device.ajax = (params) =>
+        #params.error {}
+        @callback(device.sync_log.backlog.length, _.last device.sync_log.backlog)
+
+      device.sync_log.sync_backlog()
+      undefined
+
+    "backlog should not be changed": (l, last)->
+      assert.equal l, 1
+      assert.equal last.operation, "syc"
 
   "update the object while it is syncing": 
     topic: ->
