@@ -150,23 +150,39 @@ class OS.SyncLog
         bl.push tr
     index
 
+  guard: ->
+    @guarded = true
+    @sort_backlog()
+    @guarded_backlog = []
+
+  unguard: ->
+    @guarded = false
+    @add_to_backlog @guarded_backlog
+    @sync_backlog() if @guarded_backlog.length > 0
+
   sync_backlog:()->
+    return if @guarded
+
     success = (incoming)=>
       # merge the incoming resp
-      @add_to_backlog @parse_incoming(incoming)
+      @_add_to_backlog @parse_incoming(incoming)
       @post_sync_process()
+      @unguard()
         
     # error callback
     # when something goes wrong either on the server
     # or in the connection, keep the backlog.
     error = (resp)=>
+      @unguard()
       # keep the backlog, not much to do
 
-    @reset_synced()
+    @guard()
+
+    @_reset_synced()
     
     @backlog.push new OS.SyncTransform() if _.last(@backlog)?.operation isnt "syc"
 
-    _log("Sync Backlog", @get_backlog() ) if @device.debug
+    _log("Sync Backlog", @backlog ) if @device.debug
     
     # Default JSON options.
     params = 
@@ -185,9 +201,9 @@ class OS.SyncLog
     for itr in data
       new _transforms[itr.operation](_.extend itr, {remote:true})
   
-  reset_synced: ->
+  _reset_synced: ->
     # go thru the whole backlog to find consecutive syncs
-    backlog_local = _.clone @get_backlog()
+    backlog_local = _.clone @backlog
     index = 0
     spliced = 0
     last = ""
@@ -213,12 +229,12 @@ class OS.SyncLog
 
     # there is nothing specific to the add. The id is simply not known
 
-    _log("Post Sync: ", @get_backlog() ) if @device.debug
-    @reset_synced()
-    _log("Post Sync after reset: ", @get_backlog() ) if @device.debug
+    _log("Post Sync: ", @backlog ) if @device.debug
+    @_reset_synced()
+    _log("Post Sync after reset: ", @backlog ) if @device.debug
 
     #go thru the backlog and compress each instances
-    for instance_key, inst_bl of @instance_index()
+    for instance_key, inst_bl of @instance_index(@backlog)
       deleted = false
       fields = for tr in inst_bl
         switch tr.operation
@@ -230,7 +246,7 @@ class OS.SyncLog
           else
             tr
       break if deleted
-      # this will set the backlog(!?) and update the record locally
+      # this will update the record locally
       if fields.length > 0
         instance = @device.instance fields[0].model, fields[0].id
         compiled = instance.compile(fields) 
@@ -243,20 +259,33 @@ class OS.SyncLog
     # same timestamp as the backend sync to void and cause reset
     last = _.last @backlog
     @backlog.push new OS.ConfirmationTransform( {timestamp: last.timestamp} ) if last?.operation is "syc"
-    @reset_synced()
-    _log("Post Sync after reset 2: ", @get_backlog() ) if @device.debug
+
+    @_reset_synced()
+    _log("Post Sync after reset 2: ", @backlog ) if @device.debug
 
   get_backlog: ->
-    if not @sorted
-      @sorted = true
-      @backlog = _.sortBy @backlog, (i)-> i.timestamp
-    @backlog
+    if @guarded
+      @guarded_backlog 
+    else if not @sorted
+      @sort_backlog()
+    @backlog 
+
+  sort_backlog: ->
+    @sorted = true
+    @backlog = _.sortBy @backlog, (i)-> i.timestamp
   
   reset_index: ->
     @sorted = false
     @_instance_index = null
+    @sort_backlog()
 
   add_to_backlog: (backlog)->
+    if @guarded
+      @guarded_backlog = @guarded_backlog.concat backlog
+    else
+      @_add_to_backlog(backlog)  
+
+  _add_to_backlog: (backlog)->
     @backlog = @backlog.concat backlog
     @reset_index()
     @device.save()
